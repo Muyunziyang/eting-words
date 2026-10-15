@@ -5,6 +5,8 @@
   var voices = [];
   var ready = false;
   var supported = !!synth;
+  var currentU = null; // 保留当前 utterance 引用，防止被 GC 导致安卓端无声
+  var spellU = [];     // 保留拼读各字母的 utterance 引用
 
   function loadVoices() {
     if (!synth) return;
@@ -43,6 +45,7 @@
     u.rate = opts.rate != null ? opts.rate : (Store.settings().speech_rate || 1);
     u.volume = (Store.settings().speech_volume != null ? Store.settings().speech_volume : 100) / 100;
     if (opts.onend) u.onend = opts.onend;
+    currentU = u; // 关键：保留引用，避免被垃圾回收造成安卓端无声
     try { synth.speak(u); } catch (e) { return false; }
     return true;
   }
@@ -51,6 +54,7 @@
     var letters = word.replace(/[^a-zA-Z]/g, "").toUpperCase().split("");
     if (!letters.length) return;
     opts = opts || {};
+    spellU = [];
     var rate = opts.rate != null ? opts.rate : (Store.settings().speech_rate || 1) * 0.8;
     letters.forEach(function (ch, i) {
       setTimeout(function () {
@@ -59,6 +63,7 @@
         var u = new SpeechSynthesisUtterance(ch);
         var v = pickVoice("en"); if (v) u.voice = v;
         u.lang = "en-US"; u.rate = rate;
+        spellU.push(u); // 保留引用，防止被 GC
         try { synth.speak(u); } catch (e) {}
       }, i * 420);
     });
