@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3E8BFF"/>
+      <stop offset="1" stop-color="#2E7CF6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <!-- 书 -->
+  <g fill="#ffffff">
+    <path d="M256 150c-44-22-96-22-140 0v196c44-22 96-22 140 0 44-22 96-22 140 0V150c-44-22-96-22-140 0z" opacity="0.95"/>
+    <path d="M256 150v196" fill="none" stroke="#2E7CF6" stroke-width="10"/>
+    <circle cx="256" cy="338" r="40" fill="#2E7CF6"/>
+    <path d="M242 338l14 14 22-26" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- 声波 -->
+  <g stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9">
+    <path d="M120 380h-0" />
+  </g>
+  <g fill="#ffffff" opacity="0.9">
+    <path d="M150 372c0 18 0 28 0 28s0-10 0-28z"/>
+  </g>
+  <g stroke="#BFE0FF" stroke-width="11" stroke-linecap="round" fill="none" opacity="0.95">
+    <path d="M120 360a40 40 0 0 1 0 56"/>
+    <path d="M98 344a68 68 0 0 1 0 88"/>
+  </g>
+</svg>

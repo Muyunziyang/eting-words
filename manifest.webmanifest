@@ -1,0 +1,16 @@
+{
+  "name": "E听说单词通",
+  "short_name": "E单词通",
+  "description": "中小学/四六级/考研/雅思托福 PETS 词汇学习：学习、听写、填空、错题本、收藏、统计，支持离线。",
+  "lang": "zh-CN",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F6FC",
+  "theme_color": "#2E7CF6",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
