@@ -1,38 +1,17 @@
-/* ===== 语音朗读（Web Speech API，兼容国产 TTS 引擎） ===== */
+/* ===== 语音朗读 =====
+ * 策略：优先使用「在线音频 TTS」（有道词典发音 / 谷歌翻译发音）。
+ *  - 通过 <audio> 直接播放，QQ 浏览器、夸克、Chrome、Safari、Firefox 等任意浏览器都能放；
+ *  - 不依赖手机系统自带的 TTS 引擎（荣耀 / 小米 / 华为等国产引擎差异大、容易静音）；
+ *  - 有道为国内服务，英文发音稳定可用；中文走谷歌（国内可能偏慢，仅“朗读中文释义”用到）。
+ * 兜底：当音频加载失败（如完全断网）且浏览器支持 Web Speech API 时，退回系统 TTS。
+ */
 (function (global) {
   "use strict";
+
   var synth = global.speechSynthesis || null;
-  var voices = [];
-  var ready = false;
-  var supported = !!synth;
-  var currentU = null;   // 保留当前 utterance 引用，防止被 GC 导致安卓端无声
-  var spellU = [];       // 保留拼读各字母的 utterance 引用
-  var speakToken = 0;    // 用于识别"最新一次朗读"，避免重试误伤新请求
-
-  function loadVoices() {
-    if (!synth) return;
-    try { voices = synth.getVoices() || []; } catch (e) { voices = []; }
-    ready = voices.length > 0;
-  }
-  if (supported) {
-    loadVoices();
-    // 部分国产引擎会延迟加载嗓音，监听变化持续刷新
-    try { synth.onvoiceschanged = loadVoices; } catch (e) {}
-  }
-
-  // 选择最匹配的嗓音：精确语言 → 语言前缀 → 包含 → 兜底第一个
-  function pickVoice(lang) {
-    if (!voices.length) return null;
-    var target = (lang || "en-US").toLowerCase().replace("_", "-");
-    var pref = target.slice(0, 2);
-    var byExact = voices.filter(function (v) { return (v.lang || "").toLowerCase().replace("_", "-") === target; });
-    if (byExact.length) return byExact[0];
-    var byPref = voices.filter(function (v) { return (v.lang || "").toLowerCase().indexOf(pref) === 0; });
-    if (byPref.length) return byPref[0];
-    var byContain = voices.filter(function (v) { return (v.lang || "").toLowerCase().indexOf(pref) >= 0; });
-    if (byContain.length) return byContain[0];
-    return voices[0];
-  }
+  var webSpeech = !!synth;            // 系统 TTS 是否可用（仅作离线兜底）
+  var currentAudio = null;            // 当前正在播放的 <audio>
+  var token = 0;                      // 请求序号，用于打断旧播放
 
   function isZh(text) {
     for (var i = 0; i < text.length; i++) {
@@ -42,67 +21,110 @@
     return false;
   }
 
-  function doSpeak(text, opts) {
-    try { if (synth.speaking) synth.cancel(); } catch (e) {}
-    var u = new SpeechSynthesisUtterance(text);
-    var lang = opts.lang || (isZh(text) ? "zh-CN" : "en-US");
-    u.lang = lang;
-    var v = pickVoice(lang);
-    if (v) u.voice = v;
-    u.rate = opts.rate != null ? opts.rate : (Store.settings().speech_rate || 1);
-    u.volume = (Store.settings().speech_volume != null ? Store.settings().speech_volume : 100) / 100;
-    currentU = u; // 关键：保留引用，避免被垃圾回收造成安卓端无声
-    var token = ++speakToken;
-    var started = false;
-    u.onstart = function () { started = true; };
-    if (opts.onend) u.onend = opts.onend;
-    try { synth.speak(u); } catch (e) {}
-    // 国产部分 TTS 引擎首次 speak 可能无声：400ms 内若无任何响应则重试一次
-    setTimeout(function () {
-      if (token !== speakToken) return;            // 已有更新的朗读请求
-      if (!started && !synth.speaking) {
-        try { synth.speak(u); } catch (e) {}
+  // 构造在线发音音频地址
+  function audioUrl(text, lang) {
+    var t = encodeURIComponent(text);
+    if (lang && lang.indexOf("zh") === 0) {
+      // 中文：谷歌翻译 TTS（兜底用途）
+      return "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=" + t;
+    }
+    // 英文：有道词典发音（国内稳定、音质好）
+    return "https://dict.youdao.com/dictvoice?audio=" + t + "&type=2";
+  }
+
+  // 播放单个音频；结束/出错分别回调
+  function playOne(url, onend, onerr) {
+    try {
+      if (currentAudio) {
+        currentAudio.onended = null; currentAudio.onerror = null;
+        try { currentAudio.pause(); } catch (e) {}
       }
-    }, 400);
+    } catch (e) {}
+    var a = new Audio();
+    currentAudio = a;
+    a.src = url;
+    a.onended = function () { if (onend) onend(); };
+    a.onerror = function () { if (onerr) onerr(); };
+    var p = a.play();
+    if (p && p.catch) { p.catch(function () { if (onerr) onerr(); }); }
+  }
+
+  // 用系统 TTS 朗读一句（音频失败时的兜底）
+  function speakWeb(text, lang, ondone) {
+    if (!webSpeech) { if (ondone) ondone(); return; }
+    try {
+      if (synth.resume) try { synth.resume(); } catch (e) {}
+      if (synth.speaking) try { synth.cancel(); } catch (e) {}
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = (lang && lang.indexOf("zh") === 0) ? "zh-CN" : "en-US";
+      u.onend = function () { if (ondone) ondone(); };
+      u.onerror = function () { if (ondone) ondone(); };
+      synth.speak(u);
+    } catch (e) { if (ondone) ondone(); }
+  }
+
+  // 依次播放一组文本（长句拆句 / 逐字母拼读）
+  function playSequence(items, lang, onend) {
+    var my = ++token;
+    var i = 0;
+    function next() {
+      if (my !== token) return;               // 已被新的朗读请求打断
+      if (i >= items.length) { if (onend) onend(); return; }
+      var txt = items[i++];
+      playOne(audioUrl(txt, lang), next, function () {
+        // 音频失败 → 退回系统 TTS（仅这一句），再继续
+        speakWeb(txt, lang, next);
+      });
+    }
+    next();
+  }
+
+  // 朗读单词 / 整句
+  function speak(text, opts) {
+    opts = opts || {};
+    if (!text) return false;
+    var lang = opts.lang || (isZh(text) ? "zh-CN" : "en-US");
+    var base;
+    if (text.indexOf(" ") === -1) {
+      base = [text];                           // 单词：整体发音
+    } else {
+      base = text.match(/[^.!?;。！？；]+[.!?;。！？；]*/g) || [text];
+      base = base.map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!base.length) base = [text];
+    }
+    // 重复次数（在线音频为固定语速，用“连读几遍”代替调速）
+    var rep = opts.repeat != null ? opts.repeat : (Store.settings().repeat_times || 1);
+    rep = Math.max(1, Math.min(5, rep | 0));
+    var items = [];
+    for (var r = 0; r < rep; r++) items = items.concat(base);
+    playSequence(items, lang, opts.onend);
     return true;
   }
 
-  function speak(text, opts) {
-    opts = opts || {};
-    if (!supported || !text) return false;
-    loadVoices(); // 每次朗读前刷新嗓音列表（应对引擎延迟加载）
-    return doSpeak(text, opts);
-  }
-
+  // 拼读（逐字母）
   function spell(word, opts) {
-    if (!supported || !word) return;
-    spellU = [];
+    if (!word) return;
+    opts = opts || {};
     var letters = word.replace(/[^a-zA-Z]/g, "").toUpperCase().split("");
     if (!letters.length) return;
-    opts = opts || {};
-    var rate = opts.rate != null ? opts.rate : (Store.settings().speech_rate || 1) * 0.8;
-    letters.forEach(function (ch, i) {
-      setTimeout(function () {
-        if (!supported) return;
-        try { if (synth.speaking) synth.cancel(); } catch (e) {}
-        var u = new SpeechSynthesisUtterance(ch);
-        var v = pickVoice("en"); if (v) u.voice = v;
-        u.lang = "en-US"; u.rate = rate;
-        spellU.push(u); // 保留引用，防止被 GC
-        try { synth.speak(u); } catch (e) {}
-      }, i * 420);
-    });
+    // 字母用在线音频逐个播放（跨浏览器一致）
+    playSequence(letters, "en-US", opts.onend);
   }
 
-  function stop() { if (supported) { try { synth.cancel(); } catch (e) {} } }
+  function stop() {
+    token++;                                   // 打断正在进行的序列
+    if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
+    if (webSpeech) { try { synth.cancel(); } catch (e) {} }
+  }
 
   global.SPEECH = {
-    supported: supported,
+    supported: true,        // 只要能联网即可发声（覆盖所有主流手机浏览器）
+    webSpeech: webSpeech,   // 是否还具备系统 TTS 兜底能力
     speak: speak,
     spell: spell,
     stop: stop,
     isZh: isZh,
-    voices: function () { return voices; },
-    ready: function () { return ready; },
+    voices: function () { return []; },
+    ready: function () { return true; },
   };
 })(window);

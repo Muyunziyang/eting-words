@@ -602,10 +602,9 @@
     v.appendChild(wrapCard("主题配色", tg));
     // 朗读
     v.appendChild(wrapCard("语音朗读",
-      slider("语速", "speech_rate", 0.5, 2, 0.1, function (val) { s.speech_rate = val; Store.saveSettings(s); }) +
-      slider("音量", "speech_volume", 0, 100, 5, function (val) { s.speech_volume = val; Store.saveSettings(s); }) +
       slider("重复次数", "repeat_times", 1, 5, 1, function (val) { s.repeat_times = val; Store.saveSettings(s); }) +
-      switchRow("朗读中文释义", "speak_meaning", s.speak_meaning, function (val) { s.speak_meaning = val; Store.saveSettings(s); })));
+      switchRow("朗读中文释义", "speak_meaning", s.speak_meaning, function (val) { s.speak_meaning = val; Store.saveSettings(s); }) +
+      "<div class='small muted'>发音使用在线音频（有道/谷歌），QQ 浏览器、夸克、Chrome、Safari 等任意手机浏览器均可发声，无需配置系统 TTS。需联网；完全断网时自动退回系统语音（若手机支持）。</div>"));
     // 答题
     v.appendChild(wrapCard("答题与练习",
       switchRow("开启答题倒计时", "countdown_enabled", s.countdown_enabled, function (val) { s.countdown_enabled = val; Store.saveSettings(s); settings(); }) +
@@ -617,11 +616,11 @@
       switchRow("显示音标", "show_phonetic", s.show_phonetic, function (val) { s.show_phonetic = val; Store.saveSettings(s); }) +
       switchRow("显示例句", "show_example", s.show_example, function (val) { s.show_example = val; Store.saveSettings(s); })));
     v.appendChild(wrapCard("界面", slider("正文字号", "font_size", 13, 22, 1, function (val) { s.font_size = val; Store.saveSettings(s); document.documentElement.style.setProperty("--fs", val + "px"); })));
-    if (!SPEECH.supported) {
-      v.appendChild(wrapCard("⚠️ 朗读提示", "<div class='small muted'>当前浏览器不支持语音合成（Web Speech API）。请使用安卓 Chrome / Edge，或在系统设置中开启“无障碍→文字转语音输出”。</div>"));
+    if (!SPEECH.webSpeech) {
+      v.appendChild(wrapCard("ℹ️ 朗读说明", "<div class='small muted'>本浏览器未提供系统语音合成，发音走在线音频，需联网使用。如需完全离线听读，请用安卓 Chrome 打开本应用。</div>"));
     }
     // 滑块每次渲染后自绑定
-    ["speech_rate", "speech_volume", "repeat_times", "countdown_secs", "fill_ratio", "font_size"].forEach(function (key) {
+    ["repeat_times", "countdown_secs", "fill_ratio", "font_size"].forEach(function (key) {
       var r = document.getElementById("r_" + key); if (!r) return;
       r.oninput = function () {
         var val = parseFloat(r.value); var lab = document.getElementById("v_" + key);
@@ -778,8 +777,8 @@
       "<li><b>统计</b>：累计学习、正确率、学习日历、词库分布，可重置。</li>" +
       "<li><b>导入/导出</b>：导入自定义 txt 词库；导出词表、生成可打印默写单。</li>" +
       "</ul></div>" +
-      '<div class="card"><h3>朗读说明</h3><p class="small muted">朗读使用浏览器内置语音合成（Web Speech API）。安卓请在 <b>Chrome</b> 中打开本应用；若听不到英文/中文发音，请在系统「设置 → 无障碍 → 文字转语音输出」中安装相应语音包（如 English US、中文）。</p></div>' +
-      '<div class="card"><h3>在安卓上使用</h3><p class="small muted">用 Chrome 打开本页面 → 点右上角 ⋮ →「添加到主屏幕」。之后即可像 App 一样从桌面启动，并支持离线使用。</p></div>' +
+      '<div class="card"><h3>朗读说明</h3><p class="small muted">发音采用在线音频（有道/谷歌），<b>QQ 浏览器、夸克、Chrome、Safari、Firefox</b> 等任意手机浏览器都能正常发声，无需配置手机系统 TTS 引擎。需联网；完全断网时会自动退回系统语音（仅部分浏览器支持）。</p></div>' +
+      '<div class="card"><h3>在安卓上使用</h3><p class="small muted">用任意手机浏览器打开本页面 → 点菜单「添加到主屏幕 / 加入书签」。之后即可像 App 一样从桌面启动。联网时发音正常；如需离线听读请用安卓 Chrome 并先联网打开一次以缓存。</p></div>' +
       '<div class="card"><div class="muted small">版本 v1.3.0-web · 数据同步自桌面版 v1.3.0</div></div>';
   }
 
